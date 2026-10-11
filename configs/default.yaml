@@ -1,0 +1,50 @@
+# Default configuration. Paths are relative to the repository root.
+seed: 42
+
+data:
+  # Interaction log: user_id, app_id, hours, is_recommended (filtered_games.csv in the original project)
+  interactions: data/raw/filtered_games.csv
+  # Game metadata, one or more rows per app_id (merged_filtered_games.csv in the original project).
+  # Only the first row of each app_id is kept, and the file is read in chunks, so the 1.9 GB file is fine.
+  games: data/raw/merged_filtered_games.csv
+  # Hand-built "real" user profiles that are appended to the interactions before training.
+  real_users:
+    - data/raw/user_sport.csv
+    - data/raw/user_call_of_duty.csv
+  real_user_encoding: ISO-8859-1
+
+content:
+  tfidf_max_features: 5000
+  # "combined" = description + tags + genres + categories + developers + publishers
+  # "about"    = description only (what the original notebooks actually used)
+  tfidf_text: combined
+  # Sentence-BERT model name, or "lsa" for a light TF-IDF + TruncatedSVD encoder (no torch needed)
+  encoder: all-MiniLM-L6-v2
+  bert_weights: { content: 0.7, genre: 0.2, price: 0.1 }
+
+cf:
+  # The original notebooks built sim_options but never passed them to KNNBasic, so the
+  # reported results came from Surprise's default (user-based, MSD). That is kept as the default.
+  knn: { k: 40, sim_name: msd, user_based: true }
+  svd: { n_factors: 100, reg_all: 0.02 }
+
+pipeline:
+  # Each stage re-ranks the previous stage's survivors and keeps the top n.
+  stages:
+    - [tfidf, 500]
+    - [bert, 300]
+    - [knn, 100]
+    - [svd, 10]
+
+weighted:
+  candidates: [svd, 500]
+  # Scores are min-max normalised per user before fusion:
+  # 0.5 * KNN + 0.5 * (0.5 * TF-IDF + 0.5 * BERT)
+  weights: { knn: 0.5, tfidf: 0.25, bert: 0.25 }
+  top_k: 10
+
+evaluation:
+  test_size: 0.2
+  k: 10
+  # Users sampled for ranking metrics (full-catalogue ranking is expensive).
+  n_users: 200
