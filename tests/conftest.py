@@ -1,10 +1,13 @@
 import pytest
 
-from hgrs.cli import build_models, fit_base_models
 from hgrs.config import load_config
 from hgrs.data import load_dataset
+from hgrs.factory import build_models
 from hgrs.models import GameCatalog
 from hgrs.synthetic import make_synthetic
+
+FPS_USER = "11111111"
+SPORTS_USER = "22222222"
 
 
 @pytest.fixture(scope="session")
@@ -15,18 +18,20 @@ def synthetic_root(tmp_path_factory):
 
 
 @pytest.fixture(scope="session")
-def synthetic_cfg(synthetic_root):
+def cfg(synthetic_root):
     return load_config(synthetic_root / "config.yaml", root=synthetic_root)
 
 
 @pytest.fixture(scope="session")
-def dataset(synthetic_cfg):
-    return load_dataset(synthetic_cfg)
+def dataset(cfg):
+    return load_dataset(cfg)
 
 
 @pytest.fixture(scope="session")
-def fitted(synthetic_cfg, dataset):
-    interactions, games = dataset
-    models = build_models(synthetic_cfg, GameCatalog(games))
-    fit_base_models(models, interactions)
-    return models
+def catalog(dataset):
+    return GameCatalog(dataset[1])
+
+
+@pytest.fixture(scope="session")
+def suite(cfg, dataset, catalog):
+    return build_models(cfg, catalog).fit(dataset[0])

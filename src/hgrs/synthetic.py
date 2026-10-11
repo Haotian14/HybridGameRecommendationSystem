@@ -23,7 +23,10 @@ GENRES = {
     "Puzzle": "logic tiles brain riddle levels clever",
     "Horror": "dark survival monsters fear night haunted",
 }
-REAL_USERS = {"11111111": ["Action"], "22222222": ["Sports"]}  # same ids as the real FPS / sports profiles
+REAL_USERS = {
+    "11111111": ["Action"],
+    "22222222": ["Sports"],
+}  # same ids as the real FPS / sports profiles
 
 
 def make_games(n_games: int, rng: np.random.Generator) -> pd.DataFrame:
@@ -31,7 +34,9 @@ def make_games(n_games: int, rng: np.random.Generator) -> pd.DataFrame:
     rows = []
     for i in range(n_games):
         main = names[i % len(names)]
-        extra = rng.choice([g for g in names if g != main], size=rng.integers(0, 2), replace=False).tolist()
+        extra = rng.choice(
+            [g for g in names if g != main], size=rng.integers(0, 2), replace=False
+        ).tolist()
         genres = [main, *extra]
         words = " ".join(GENRES[g] for g in genres).split()
         rows.append(
@@ -68,7 +73,9 @@ def _history(user_id: str, favourites: list[str], games: pd.DataFrame, n: int, r
     return rows
 
 
-def make_synthetic(out_dir: str | Path, n_users: int = 80, n_games: int = 96, seed: int = 42) -> Path:
+def make_synthetic(
+    out_dir: str | Path, n_users: int = 80, n_games: int = 96, seed: int = 42
+) -> Path:
     """Write CSVs and a matching config to ``out_dir``; return the config path."""
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -82,7 +89,9 @@ def make_synthetic(out_dir: str | Path, n_users: int = 80, n_games: int = 96, se
     interactions = pd.DataFrame(rows)
     interactions.to_csv(out / "interactions.csv", index=False)
     # The real project's metadata file repeats game rows per interaction; mimic that shape.
-    interactions[["user_id", "app_id"]].merge(games, on="app_id").to_csv(out / "games.csv", index=False)
+    interactions[["user_id", "app_id"]].merge(games, on="app_id").to_csv(
+        out / "games.csv", index=False
+    )
 
     real_paths = []
     for uid, favs in REAL_USERS.items():
@@ -104,13 +113,23 @@ def make_synthetic(out_dir: str | Path, n_users: int = 80, n_games: int = 96, se
             "encoder": "lsa",
             "bert_weights": {"content": 0.7, "genre": 0.2, "price": 0.1},
         },
-        "cf": {
-            "knn": {"k": 20, "sim_name": "msd", "user_based": True},
-            "svd": {"n_factors": 20, "reg_all": 0.02},
-        },
+        "knn": {"k": 20, "sim_name": "msd", "user_based": True},
+        "svd": {"n_factors": 20, "reg_all": 0.02, "fold_in_reg": 1.0},
         "pipeline": {"stages": [["tfidf", 60], ["bert", 40], ["knn", 20], ["svd", 10]]},
-        "weighted": {"candidates": ["svd", 60], "weights": {"knn": 0.5, "tfidf": 0.25, "bert": 0.25}, "top_k": 10},
-        "evaluation": {"test_size": 0.2, "k": 10, "n_users": 50},
+        "weighted": {
+            "candidate_model": "svd",
+            "n_candidates": 60,
+            "weights": {"knn": 0.5, "tfidf": 0.25, "bert": 0.25},
+            "top_k": 10,
+        },
+        "adaptive": {"content_models": ["tfidf", "bert"], "cf_model": "svd", "shrinkage": 10},
+        "evaluation": {
+            "test_size": 0.2,
+            "k": 10,
+            "n_users": 50,
+            "cold_start_users": 20,
+            "cold_start_sizes": [1, 3, 5, 10],
+        },
     }
     cfg_path = out / "config.yaml"
     cfg_path.write_text(yaml.safe_dump(cfg, sort_keys=False), encoding="utf-8")

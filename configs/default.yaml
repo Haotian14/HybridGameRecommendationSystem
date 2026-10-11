@@ -2,15 +2,16 @@
 seed: 42
 
 data:
-  # Interaction log: user_id, app_id, hours, is_recommended (filtered_games.csv in the original project)
+  # Both files are produced by `hgrs prepare` from the public sources (see data/README.md).
+  # Interactions: user_id, app_id, hours, is_recommended, genre
   interactions: data/raw/filtered_games.csv
-  # Game metadata, one or more rows per app_id (merged_filtered_games.csv in the original project).
-  # Only the first row of each app_id is kept, and the file is read in chunks, so the 1.9 GB file is fine.
-  games: data/raw/merged_filtered_games.csv
-  # Hand-built "real" user profiles that are appended to the interactions before training.
+  # Game catalogue: one row per game. The original project's 1.9 GB merged_filtered_games.csv
+  # (game metadata repeated on every interaction) also works here; it is read in chunks.
+  games: data/raw/games.csv
+  # Hand-built test profiles appended to the interactions before training.
   real_users:
-    - data/raw/user_sport.csv
-    - data/raw/user_call_of_duty.csv
+    - data/profiles/user_sport.csv
+    - data/profiles/user_call_of_duty.csv
   real_user_encoding: ISO-8859-1
 
 content:
@@ -21,12 +22,16 @@ content:
   # Sentence-BERT model name, or "lsa" for a light TF-IDF + TruncatedSVD encoder (no torch needed)
   encoder: all-MiniLM-L6-v2
   bert_weights: { content: 0.7, genre: 0.2, price: 0.1 }
+  # cosine keeps the genre term on the same scale as the content term; "dot" reproduces
+  # the original notebooks, where games tagged with many genres crowded out the rest
+  bert_similarity: cosine
 
-cf:
-  # The original notebooks built sim_options but never passed them to KNNBasic, so the
-  # reported results came from Surprise's default (user-based, MSD). That is kept as the default.
-  knn: { k: 40, sim_name: msd, user_based: true }
-  svd: { n_factors: 100, reg_all: 0.02 }
+# The original notebooks built sim_options but never passed them to KNNBasic, so the
+# reported results came from Surprise's default (user-based, MSD). That is kept as the default.
+knn: { k: 40, sim_name: msd, user_based: true }
+
+# fold_in_reg: ridge penalty when fitting a latent vector for a user unseen in training (cold start)
+svd: { n_factors: 100, reg_all: 0.02, fold_in_reg: 1.0 }
 
 pipeline:
   # Each stage re-ranks the previous stage's survivors and keeps the top n.
@@ -37,14 +42,26 @@ pipeline:
     - [svd, 10]
 
 weighted:
-  candidates: [svd, 500]
+  candidate_model: svd
+  n_candidates: 500
   # Scores are min-max normalised per user before fusion:
   # 0.5 * KNN + 0.5 * (0.5 * TF-IDF + 0.5 * BERT)
   weights: { knn: 0.5, tfidf: 0.25, bert: 0.25 }
   top_k: 10
+
+adaptive:
+  # Blend content and collaborative scores by how much we know about the user:
+  # cf_weight = n_games / (n_games + shrinkage), so a newcomer is served by content,
+  # and a regular mostly by collaborative filtering.
+  content_models: [tfidf, bert]
+  cf_model: svd
+  shrinkage: 10
 
 evaluation:
   test_size: 0.2
   k: 10
   # Users sampled for ranking metrics (full-catalogue ranking is expensive).
   n_users: 200
+  # Cold-start experiment: users removed from training entirely, then given n of their games.
+  cold_start_users: 200
+  cold_start_sizes: [1, 3, 5, 10, 20]

@@ -11,6 +11,8 @@ dist/
 data/raw/*
 !data/raw/.gitkeep
 data/processed/
+data/source/
+data/rebuilt/
 
 # Generated outputs (the curated files in results/ are tracked explicitly)
 results/*.csv

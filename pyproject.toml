@@ -7,19 +7,19 @@ name = "hgrs"
 version = "1.0.0"
 description = "Hybrid game recommendation system for Steam: TF-IDF + Sentence-BERT + KNN + SVD, combined as a cascade pipeline or a weighted fusion."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
-    "numpy>=1.24,<2.3",
-    "pandas>=2.0",
-    "scikit-learn>=1.3",
-    "scipy>=1.10",
-    "scikit-surprise>=1.1.3",
+    "numpy>=2.0",
+    "pandas>=2.2",
+    "scikit-learn>=1.5",
+    "scipy>=1.13",
+    "scikit-surprise>=1.1.4",  # first release built against numpy 2
     "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
-bert = ["sentence-transformers>=2.2"]
-dev = ["pytest>=7"]
+bert = ["sentence-transformers>=5.0"]
+dev = ["pytest>=8", "ruff>=0.15"]
 
 [project.scripts]
 hgrs = "hgrs.cli:main"
@@ -29,3 +29,14 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "N", "RUF"]
+ignore = [
+    "N803", "N806",  # X, A, y: matrix names follow the maths
+    "RUF001", "RUF002", "RUF003",  # μ, λ, · in formulas are intentional
+]
